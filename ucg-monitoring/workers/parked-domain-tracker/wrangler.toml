@@ -1,0 +1,200 @@
+name = "parked-domain-tracker"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+# D1 Database binding
+[[d1_databases]]
+binding = "DB"
+database_name = "parked-domains-visitors"
+database_id = "0e765751-9954-4634-ad48-2251edc71fb4"
+
+# borrowman.au
+[[routes]]
+pattern = "borrowman.au"
+zone_name = "borrowman.au"
+[[routes]]
+pattern = "borrowman.au/*"
+zone_name = "borrowman.au"
+[[routes]]
+pattern = "*.borrowman.au/*"
+zone_name = "borrowman.au"
+
+# borrowman.com.au
+[[routes]]
+pattern = "borrowman.com.au"
+zone_name = "borrowman.com.au"
+[[routes]]
+pattern = "borrowman.com.au/*"
+zone_name = "borrowman.com.au"
+[[routes]]
+pattern = "*.borrowman.com.au/*"
+zone_name = "borrowman.com.au"
+
+# borrowman.net.au
+[[routes]]
+pattern = "borrowman.net.au"
+zone_name = "borrowman.net.au"
+[[routes]]
+pattern = "borrowman.net.au/*"
+zone_name = "borrowman.net.au"
+[[routes]]
+pattern = "*.borrowman.net.au/*"
+zone_name = "borrowman.net.au"
+
+# boz.ai
+[[routes]]
+pattern = "boz.ai"
+zone_name = "boz.ai"
+[[routes]]
+pattern = "boz.ai/*"
+zone_name = "boz.ai"
+[[routes]]
+pattern = "*.boz.ai/*"
+zone_name = "boz.ai"
+
+# boz.dev
+[[routes]]
+pattern = "boz.dev"
+zone_name = "boz.dev"
+[[routes]]
+pattern = "boz.dev/*"
+zone_name = "boz.dev"
+[[routes]]
+pattern = "*.boz.dev/*"
+zone_name = "boz.dev"
+
+# bozza.ai
+[[routes]]
+pattern = "bozza.ai"
+zone_name = "bozza.ai"
+[[routes]]
+pattern = "bozza.ai/*"
+zone_name = "bozza.ai"
+[[routes]]
+pattern = "*.bozza.ai/*"
+zone_name = "bozza.ai"
+
+# bozza.au
+[[routes]]
+pattern = "bozza.au"
+zone_name = "bozza.au"
+[[routes]]
+pattern = "bozza.au/*"
+zone_name = "bozza.au"
+[[routes]]
+pattern = "*.bozza.au/*"
+zone_name = "bozza.au"
+
+# bozza.online
+[[routes]]
+pattern = "bozza.online"
+zone_name = "bozza.online"
+[[routes]]
+pattern = "bozza.online/*"
+zone_name = "bozza.online"
+[[routes]]
+pattern = "*.bozza.online/*"
+zone_name = "bozza.online"
+
+# bruteforce.au
+[[routes]]
+pattern = "bruteforce.au"
+zone_name = "bruteforce.au"
+[[routes]]
+pattern = "bruteforce.au/*"
+zone_name = "bruteforce.au"
+[[routes]]
+pattern = "*.bruteforce.au/*"
+zone_name = "bruteforce.au"
+
+# bruteforce.cloud
+[[routes]]
+pattern = "bruteforce.cloud"
+zone_name = "bruteforce.cloud"
+[[routes]]
+pattern = "bruteforce.cloud/*"
+zone_name = "bruteforce.cloud"
+[[routes]]
+pattern = "*.bruteforce.cloud/*"
+zone_name = "bruteforce.cloud"
+
+# bruteforce.group
+[[routes]]
+pattern = "bruteforce.group"
+zone_name = "bruteforce.group"
+[[routes]]
+pattern = "bruteforce.group/*"
+zone_name = "bruteforce.group"
+[[routes]]
+pattern = "*.bruteforce.group/*"
+zone_name = "bruteforce.group"
+
+# bruteforce.support
+[[routes]]
+pattern = "bruteforce.support"
+zone_name = "bruteforce.support"
+[[routes]]
+pattern = "bruteforce.support/*"
+zone_name = "bruteforce.support"
+[[routes]]
+pattern = "*.bruteforce.support/*"
+zone_name = "bruteforce.support"
+
+# bruteforcegroup.com.au
+[[routes]]
+pattern = "bruteforcegroup.com.au"
+zone_name = "bruteforcegroup.com.au"
+[[routes]]
+pattern = "bruteforcegroup.com.au/*"
+zone_name = "bruteforcegroup.com.au"
+[[routes]]
+pattern = "*.bruteforcegroup.com.au/*"
+zone_name = "bruteforcegroup.com.au"
+
+# dandeshon.com.au
+[[routes]]
+pattern = "dandeshon.com.au"
+zone_name = "dandeshon.com.au"
+[[routes]]
+pattern = "dandeshon.com.au/*"
+zone_name = "dandeshon.com.au"
+[[routes]]
+pattern = "*.dandeshon.com.au/*"
+zone_name = "dandeshon.com.au"
+
+# e-flux.au
+[[routes]]
+pattern = "e-flux.au"
+zone_name = "e-flux.au"
+[[routes]]
+pattern = "e-flux.au/*"
+zone_name = "e-flux.au"
+[[routes]]
+pattern = "*.e-flux.au/*"
+zone_name = "e-flux.au"
+
+# e-flux.com.au
+[[routes]]
+pattern = "e-flux.com.au"
+zone_name = "e-flux.com.au"
+[[routes]]
+pattern = "e-flux.com.au/*"
+zone_name = "e-flux.com.au"
+[[routes]]
+pattern = "*.e-flux.com.au/*"
+zone_name = "e-flux.com.au"
+
+# eflux.au
+[[routes]]
+pattern = "eflux.au"
+zone_name = "eflux.au"
+[[routes]]
+pattern = "eflux.au/*"
+zone_name = "eflux.au"
+[[routes]]
+pattern = "*.eflux.au/*"
+zone_name = "eflux.au"
+
+# Environment variables
+[vars]
+ENVIRONMENT = "production"

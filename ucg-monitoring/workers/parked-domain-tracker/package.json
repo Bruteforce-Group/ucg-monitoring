@@ -1,0 +1,27 @@
+{
+  "name": "parked-domain-tracker",
+  "version": "1.0.0",
+  "description": "Cloudflare Worker for parked domain tracking",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail",
+    "db:create": "wrangler d1 create parked-domains-visitors",
+    "db:init": "wrangler d1 execute parked-domains-visitors --file=./schema.sql",
+    "db:query": "wrangler d1 execute parked-domains-visitors --command"
+  },
+  "keywords": [
+    "cloudflare",
+    "workers",
+    "d1",
+    "tracking"
+  ],
+  "author": "Bruteforce Group",
+  "license": "ISC",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241022.0",
+    "typescript": "^5.6.3",
+    "wrangler": "^4.45.3"
+  }
+}
