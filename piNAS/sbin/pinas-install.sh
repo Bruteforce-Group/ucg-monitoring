@@ -21,6 +21,8 @@ PROGRESS_FILE="$BOOT_MNT/pinas-progress.json"
 AUTORUN_FLAG_DIR="/var/lib/pinas-installer"
 AUTORUN_FLAG="$AUTORUN_FLAG_DIR/run-on-boot.flag"
 AUTORUN_SERVICE="/etc/systemd/system/pinas-install-onboot.service"
+CMDLINE_FILE="$BOOT_MNT/cmdline.txt"
+[ -f "$CMDLINE_FILE" ] || CMDLINE_FILE="/boot/cmdline.txt"
 
 ONLINE=0
 if ping -c1 -W1 1.1.1.1 >/dev/null 2>&1; then
@@ -172,6 +174,29 @@ EOS
   systemctl enable pinas-install-onboot.service >/dev/null 2>&1 || true
 }
 
+ensure_cmdline_modules() {
+  if [ ! -f "$CMDLINE_FILE" ]; then
+    return
+  fi
+
+  local contents
+  contents="$(tr -d '\n' <"$CMDLINE_FILE")"
+
+  if echo "$contents" | grep -q 'modules-load=.*dwc2'; then
+    if echo "$contents" | grep -q 'modules-load=.*g_ether'; then
+      return
+    fi
+  fi
+
+  if echo "$contents" | grep -q 'modules-load='; then
+    contents="$(echo "$contents" | sed 's/modules-load=[^ ]*/modules-load=dwc2,g_ether/')"
+  else
+    contents="$contents modules-load=dwc2,g_ether"
+  fi
+
+  printf "%s\n" "$contents" >"$CMDLINE_FILE"
+}
+
 schedule_autorun_next_boot() {
   mkdir -p "$AUTORUN_FLAG_DIR"
   touch "$AUTORUN_FLAG"
@@ -202,6 +227,7 @@ run_stage() {
 
 progress_init
 ensure_autorun_service
+ensure_cmdline_modules
 
 install_apt_pkgs() {
   local pkgs=("$@")
@@ -634,6 +660,13 @@ def init_display_and_touch():
     return display, ts, driver
 
 
+def linear_map(value: int, in_min: int, in_max: int, out_min: int, out_max: int) -> int:
+    if in_max == in_min:
+        return out_min
+    ratio = (value - in_min) / (in_max - in_min)
+    return int(out_min + ratio * (out_max - out_min))
+
+
 def map_touch(ts, rotation=270, driver=None):
     """Read raw touch, apply calibration, and map to screen coordinates."""
     if ts is None:
@@ -652,6 +685,14 @@ def map_touch(ts, rotation=270, driver=None):
             return None
 
         x_raw, y_raw, *_ = p
+        WIDTH, HEIGHT = 320, 240
+
+        if driver == "xpt2046" and rotation == 270:
+            screen_x = linear_map(y_raw, 143, 3715, 0, WIDTH - 1)
+            screen_y = linear_map(x_raw, 3786, 216, 0, HEIGHT - 1)
+            screen_x = max(0, min(WIDTH - 1, screen_x))
+            screen_y = max(0, min(HEIGHT - 1, screen_y))
+            return (screen_x, screen_y)
 
         MIN_X, MAX_X = 200, 3800
         MIN_Y, MAX_Y = 200, 3800
@@ -661,8 +702,6 @@ def map_touch(ts, rotation=270, driver=None):
 
         x_norm = (x_raw - MIN_X) / (MAX_X - MIN_X)
         y_norm = (y_raw - MIN_Y) / (MAX_Y - MIN_Y)
-
-        WIDTH, HEIGHT = 320, 240
 
         if rotation == 270:
             screen_x = int(y_norm * WIDTH)
@@ -884,10 +923,12 @@ def main():
     display, ts, touch_driver = init_display_and_touch()
     font_big, font_medium, font_small = load_fonts()
 
+    display_model = "XPT2046" if touch_driver == "xpt2046" else "XC9022"
     if touch_driver is None:
         print("Touch controller not detected; dashboard touch input disabled")
     else:
         print(f"Touch controller detected: {touch_driver}")
+    print(f"Dashboard configured for {display_model}")
 
     width = display.width
     height = display.height
@@ -1039,17 +1080,28 @@ EOBF
 #!/bin/bash
 set -euo pipefail
 
-GADGET_NAME=pinas
-GADGET_DIR=/sys/kernel/config/usb_gadget/$GADGET_NAME
 BACKING_FILE=/srv/usb-gadget/pinas-gadget.img
+GADGET_NAME=pinas
+
+CONFIGFS_ROOT=$(findmnt -o TARGET -n configfs || true)
+if [ -z "$CONFIGFS_ROOT" ] && [ -d /sys/kernel/config ]; then
+  CONFIGFS_ROOT="/sys/kernel/config"
+fi
+if [ -z "$CONFIGFS_ROOT" ]; then
+  mount -t configfs configfs /sys/kernel/config
+  CONFIGFS_ROOT="/sys/kernel/config"
+fi
 
 if [ ! -f "$BACKING_FILE" ]; then
   echo "backing file $BACKING_FILE not found" >&2
   exit 1
 fi
 
-if ! mountpoint -q /sys/kernel/config; then
-  mount -t configfs none /sys/kernel/config
+GADGET_DIR="$CONFIGFS_ROOT/usb_gadget/$GADGET_NAME"
+
+if [ -d "$GADGET_DIR" ]; then
+  echo "USB gadget already configured"
+  exit 0
 fi
 
 modprobe libcomposite || true
@@ -1063,33 +1115,37 @@ echo 0x0100 > bcdDevice
 echo 0x0200 > bcdUSB
 
 mkdir -p strings/0x409
-echo "00000001" > strings/0x409/serialnumber
+SERIAL="$(sha256sum < /etc/machine-id | awk '{print $1}')"
+echo "piNAS-$SERIAL" > strings/0x409/serialnumber
 echo "piNAS" > strings/0x409/manufacturer
-echo "piNAS Mass Storage" > strings/0x409/product
+echo "piNAS Composite Gadget" > strings/0x409/product
 
 mkdir -p configs/c.1/strings/0x409
 echo "Mass Storage" > configs/c.1/strings/0x409/configuration
-echo 250 > configs/c.1/MaxPower
+
+MAX_POWER=250
+if grep -q "Raspberry Pi 5" /sys/firmware/devicetree/base/model 2>/dev/null; then
+  MAX_POWER=600
+elif grep -q "Raspberry Pi 4" /sys/firmware/devicetree/base/model 2>/dev/null; then
+  MAX_POWER=500
+fi
+echo $MAX_POWER > configs/c.1/MaxPower
 
 mkdir -p functions/mass_storage.usb0
-
 echo 0 > functions/mass_storage.usb0/stall
 echo 0 > functions/mass_storage.usb0/lun.0/removable
 echo 0 > functions/mass_storage.usb0/lun.0/ro
 echo "$BACKING_FILE" > functions/mass_storage.usb0/lun.0/file
 
-if [ ! -e configs/c.1/mass_storage.usb0 ]; then
-  ln -s functions/mass_storage.usb0 configs/c.1/
-fi
+ln -sf functions/mass_storage.usb0 configs/c.1/
 
-UDC_NAME=$(ls /sys/class/udc | head -n1)
+UDC_NAME=$(ls /sys/class/udc 2>/dev/null | head -n1 || true)
 if [ -z "$UDC_NAME" ]; then
-  echo "no UDC found in /sys/class/udc; ensure dwc2 overlay is enabled and rebooted" >&2
+  echo "no UDC found in /sys/class/udc; ensure dwc2/g_ether modules load at boot and hardware supports device mode" >&2
   exit 1
 fi
 
 echo "$UDC_NAME" > UDC
-
 echo "USB mass storage gadget started on UDC $UDC_NAME"
 EOGS
 
@@ -1099,10 +1155,15 @@ EOGS
 #!/bin/bash
 set -euo pipefail
 
+CONFIGFS_ROOT=$(findmnt -o TARGET -n configfs || true)
 GADGET_NAME=pinas
-GADGET_DIR=/sys/kernel/config/usb_gadget/$GADGET_NAME
+GADGET_DIR=
 
-if [ ! -d "$GADGET_DIR" ]; then
+if [ -n "$CONFIGFS_ROOT" ] && [ -d "$CONFIGFS_ROOT/usb_gadget/$GADGET_NAME" ]; then
+  GADGET_DIR="$CONFIGFS_ROOT/usb_gadget/$GADGET_NAME"
+fi
+
+if [ -z "$GADGET_DIR" ]; then
   echo "gadget $GADGET_NAME not present"
   exit 0
 fi
@@ -1110,7 +1171,7 @@ fi
 cd "$GADGET_DIR"
 
 if [ -f UDC ]; then
-  echo "" > UDC
+  echo "" > UDC || true
 fi
 
 if [ -L configs/c.1/mass_storage.usb0 ]; then
@@ -1121,17 +1182,10 @@ if [ -d functions/mass_storage.usb0 ]; then
   rmdir functions/mass_storage.usb0
 fi
 
-if [ -d configs/c.1/strings/0x409 ]; then
-  rmdir configs/c.1/strings/0x409 || true
-fi
-if [ -d configs/c.1 ]; then
-  rmdir configs/c.1 || true
-fi
-if [ -d strings/0x409 ]; then
-  rmdir strings/0x409 || true
-fi
+find configs -type d -mindepth 1 -maxdepth 2 -empty -delete || true
+find strings -type d -mindepth 1 -maxdepth 2 -empty -delete || true
 
-cd /sys/kernel/config/usb_gadget
+cd "$CONFIGFS_ROOT/usb_gadget"
 rmdir "$GADGET_NAME" || true
 
 echo "USB mass storage gadget stopped"
@@ -1207,6 +1261,7 @@ if [ "${PINAS_AUTORUN:-0}" = "1" ]; then
   clear_autorun_flag
   echo "Automatic post-reboot installer run complete; system will reboot once more to finalize device mode."
   systemctl reboot
+  exit 0
 fi
 
 schedule_autorun_next_boot

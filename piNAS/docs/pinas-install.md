@@ -99,6 +99,7 @@ Result: the SD card now holds all required `.deb` and `.whl` files for later off
   - `APT_CACHE_DIR="$BOOT_MNT/pinas-apt"`
   - `PIP_CACHE_DIR="$BOOT_MNT/pinas-py"`
 - Detects the **main user** (`APP_USER`): first UID ≥ 1000 in `/etc/passwd` (excluding `nobody`), falling back to `pi`.
+- Ensures the kernel command line (`/boot/firmware/cmdline.txt` or `/boot/cmdline.txt`) contains `modules-load=dwc2,g_ether` so gadget mode modules come up automatically on every boot.
 - Installs and enables a small systemd unit (`pinas-install-onboot.service`) that re-runs the installer automatically on the *next* boot whenever a manual run completes. That automatic pass reboots the Pi again when it finishes so kernel/device-tree changes are guaranteed to take effect without human intervention.
 - Creates a machine-readable progress file at `$BOOT_MNT/pinas-progress.json` that records the status of each installation stage.
 - Emits a concise stage dashboard in the console log so you can watch progress over SSH/XTerm as well as on the TFT.
@@ -238,8 +239,8 @@ Set up the **permanent** XC9022 dashboard which runs on boot and shows NAS statu
 ### Steps
 
 1. Ensure the dashboard venv has extra packages:
-   - `adafruit-circuitpython-stmpe610` – for the STMPE610 touch controller.
-   - `adafruit-circuitpython-xpt2046` – for panels that expose XPT2046 touch hardware.
+   - `adafruit-circuitpython-stmpe610` – for XC9022 shields that use STMPE610 touch.
+   - `adafruit-circuitpython-xpt2046` – for shields that use the XPT2046 touch controller (driver borrowed from the ESP32 project). 
    - `psutil` – for CPU/memory/disk/network stats.
    - Uses `pip_install_offline_first` with `/opt/pinas-dashboard/.venv/bin`.
 
@@ -288,7 +289,7 @@ Set up the **permanent** XC9022 dashboard which runs on boot and shows NAS statu
    - `systemctl daemon-reload`
    - `systemctl enable --now pinas-dashboard.service || true`
 
-Result: on each boot, the XC9022 displays the NAS dashboard as a continuous status panel. During startup the dashboard now attempts to initialize an `STMPE610` touch controller first and falls back to `XPT2046` automatically, so either hardware variant works without manual configuration (touch gracefully disables itself if nothing is detected).
+Result: on each boot, the XC9022 displays the NAS dashboard as a continuous status panel. During startup the dashboard now probes for `STMPE610` first and falls back to `XPT2046`, applying controller-specific calibration curves (the XPT numbers come from the ESP32 Marauder implementation). If no touch controller responds, the dashboard keeps running with tap-to-toggle disabled.
 
 ---
 
@@ -324,16 +325,14 @@ This ensures the DWC2 USB controller is in **device** mode and SPI/I2C are enabl
 Install:
 
 - `/usr/local/sbin/pinas-usb-gadget-start.sh`
-  - Mounts `configfs` if needed.
-  - Loads `libcomposite`.
-  - Creates `/sys/kernel/config/usb_gadget/pinas`.
-  - Sets vendor/product IDs and strings.
-  - Creates `functions/mass_storage.usb0` and points it at `/srv/usb-gadget/pinas-gadget.img`.
-  - Binds the gadget to the first available UDC (`/sys/class/udc/*`).
+  - Mounts `configfs` (TeslaUSB style) if needed and loads `libcomposite`.
+  - Creates `/sys/kernel/config/usb_gadget/pinas`, using deterministic serials derived from `/etc/machine-id`.
+  - Sets vendor/product IDs, strings, and `MaxPower` according to the detected Pi model (Pi 5 can request more current).
+  - Creates `functions/mass_storage.usb0`, points it at `/srv/usb-gadget/pinas-gadget.img`, and links it into `configs/c.1`.
+  - Binds the gadget to the first available UDC (`/sys/class/udc/*`), emitting a helpful error if the platform lacks device mode.
 
 - `/usr/local/sbin/pinas-usb-gadget-stop.sh`
-  - Unbinds the gadget from UDC.
-  - Removes mass_storage function, configs, strings, and gadget directory cleanly.
+  - Unbinds the gadget and removes mass-storage functions/configs before deleting the gadget directory (mirrors TeslaUSB teardown).
 
 ### Systemd unit for gadget
 
@@ -363,7 +362,7 @@ Result: on boot, the mass-storage gadget is automatically created and exported t
 2. `install_packages` – install required APT packages (offline-first) using `install_apt_pkgs`.
 3. `setup_usb_nas` – configure Samba, auto-mount USB devices, and expose them as guest shares.
 4. `setup_dashboard` – install and enable the permanent XC9022 NAS dashboard service.
-5. `setup_usb_gadget` – set up USB mass-storage gadget and its systemd service.
+5. `setup_usb_gadget` – ensure `modules-load=dwc2,g_ether` is present in `cmdline.txt`, then install TeslaUSB-style start/stop scripts and the gadget systemd service.
 6. `finalize_install` – wait for `pinas-dashboard.service` to report `active`, stop the temporary TFT log viewer, and start the permanent dashboard.
 7. Print a final message + schedule an automatic re-run on the *next* boot (by touching `/var/lib/pinas-installer/run-on-boot.flag`). The auto-run unit (`pinas-install-onboot.service`) clears the flag and reboots again when that second pass succeeds.
 
