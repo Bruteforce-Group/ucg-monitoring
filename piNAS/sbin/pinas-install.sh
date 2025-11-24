@@ -18,6 +18,9 @@ echo "==== piNAS installer starting at $(date) ===="
 APT_CACHE_DIR="$BOOT_MNT/pinas-apt"
 PIP_CACHE_DIR="$BOOT_MNT/pinas-py"
 PROGRESS_FILE="$BOOT_MNT/pinas-progress.json"
+AUTORUN_FLAG_DIR="/var/lib/pinas-installer"
+AUTORUN_FLAG="$AUTORUN_FLAG_DIR/run-on-boot.flag"
+AUTORUN_SERVICE="/etc/systemd/system/pinas-install-onboot.service"
 
 ONLINE=0
 if ping -c1 -W1 1.1.1.1 >/dev/null 2>&1; then
@@ -148,6 +151,36 @@ progress_init() {
   progress_flush
 }
 
+ensure_autorun_service() {
+  mkdir -p "$AUTORUN_FLAG_DIR"
+  cat >"$AUTORUN_SERVICE" <<'EOS'
+[Unit]
+Description=piNAS installer auto-run (scheduled)
+ConditionPathExists=/var/lib/pinas-installer/run-on-boot.flag
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=PINAS_AUTORUN=1
+ExecStart=/usr/local/sbin/pinas-install.sh
+
+[Install]
+WantedBy=multi-user.target
+EOS
+  systemctl daemon-reload
+  systemctl enable pinas-install-onboot.service >/dev/null 2>&1 || true
+}
+
+schedule_autorun_next_boot() {
+  mkdir -p "$AUTORUN_FLAG_DIR"
+  touch "$AUTORUN_FLAG"
+}
+
+clear_autorun_flag() {
+  rm -f "$AUTORUN_FLAG"
+}
+
 run_stage() {
   local stage="$1"
   shift
@@ -168,6 +201,7 @@ run_stage() {
 }
 
 progress_init
+ensure_autorun_service
 
 install_apt_pkgs() {
   local pkgs=("$@")
@@ -1168,5 +1202,14 @@ run_stage usb_gadget setup_usb_gadget
 run_stage finalize finalize_install
 
 echo "==== piNAS installer finished at $(date) ===="
-echo "Reboot once more so dwc2 / gadget and SPI/I2C dtparams are active."
+
+if [ "${PINAS_AUTORUN:-0}" = "1" ]; then
+  clear_autorun_flag
+  echo "Automatic post-reboot installer run complete; system will reboot once more to finalize device mode."
+  systemctl reboot
+fi
+
+schedule_autorun_next_boot
+echo "Installer will automatically run again on the next boot to apply kernel/device changes, then reboot once more when finished."
+echo "Please reboot now to allow the scheduled run to proceed."
 exit 0

@@ -99,6 +99,7 @@ Result: the SD card now holds all required `.deb` and `.whl` files for later off
   - `APT_CACHE_DIR="$BOOT_MNT/pinas-apt"`
   - `PIP_CACHE_DIR="$BOOT_MNT/pinas-py"`
 - Detects the **main user** (`APP_USER`): first UID ≥ 1000 in `/etc/passwd` (excluding `nobody`), falling back to `pi`.
+- Installs and enables a small systemd unit (`pinas-install-onboot.service`) that re-runs the installer automatically on the *next* boot whenever a manual run completes. That automatic pass reboots the Pi again when it finishes so kernel/device-tree changes are guaranteed to take effect without human intervention.
 - Creates a machine-readable progress file at `$BOOT_MNT/pinas-progress.json` that records the status of each installation stage.
 - Emits a concise stage dashboard in the console log so you can watch progress over SSH/XTerm as well as on the TFT.
 - Stage order:
@@ -363,16 +364,14 @@ Result: on boot, the mass-storage gadget is automatically created and exported t
 3. `setup_usb_nas` – configure Samba, auto-mount USB devices, and expose them as guest shares.
 4. `setup_dashboard` – install and enable the permanent XC9022 NAS dashboard service.
 5. `setup_usb_gadget` – set up USB mass-storage gadget and its systemd service.
-6. Wait for the dashboard systemd service to report `active` (up to ~30 seconds) so the TFT switches from the temporary viewer to the permanent dashboard as soon as possible.
-7. Kill any running `pinas-install-display.py` (temporary log view).
-8. Print a final message:
-   - Installer finished.
-   - **Reboot once more** so `dwc2`/gadget and SPI/I2C `dtparam`s are active.
+6. `finalize_install` – wait for `pinas-dashboard.service` to report `active`, stop the temporary TFT log viewer, and start the permanent dashboard.
+7. Print a final message + schedule an automatic re-run on the *next* boot (by touching `/var/lib/pinas-installer/run-on-boot.flag`). The auto-run unit (`pinas-install-onboot.service`) clears the flag and reboots again when that second pass succeeds.
 
 After the reboot, the system should:
 
 - Start `pinas-dashboard.service` → XC9022 NAS dashboard.
 - Auto-mount any USB devices under `/srv/usb-shares` and expose them via SMB.
 - Start `pinas-usb-gadget.service` → Pi appears as a USB mass-storage device backed by `/srv/usb-gadget/pinas-gadget.img`.
+- Detect the scheduling flag, run `pinas-install.sh` automatically once more via systemd, and reboot itself upon completion. Subsequent boots revert to normal operation because the flag is cleared.
 
 This markdown summarizes everything in the current versions of `pinas-install.sh` and `pinas-cache-deps.sh`, so you can safely reference it from tooling like Cursor or use it as documentation when modifying or extending piNAS.
