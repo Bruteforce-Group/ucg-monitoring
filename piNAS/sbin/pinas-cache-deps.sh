@@ -20,7 +20,6 @@ PY_PKGS_BASE=(
 )
 PY_PKGS_EXTRA=(
   adafruit-circuitpython-stmpe610
-  adafruit-circuitpython-xpt2046
   psutil
 )
 

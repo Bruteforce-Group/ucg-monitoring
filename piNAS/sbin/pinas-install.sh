@@ -292,7 +292,7 @@ setup_install_display() {
   /opt/pinas-dashboard/.venv/bin/pip install --upgrade pip setuptools wheel || true
   progress_note init_display "Installing display libraries"
   pip_install_offline_first "/opt/pinas-dashboard/.venv/bin" \
-    adafruit-blinka adafruit-circuitpython-rgb-display pillow adafruit-circuitpython-xpt2046
+    adafruit-blinka adafruit-circuitpython-rgb-display pillow
 
   cat >/usr/local/sbin/pinas-install-display.py <<'EOPY'
 #!/usr/bin/env python3
@@ -573,7 +573,7 @@ setup_dashboard() {
   progress_note dashboard "Installing dashboard dependencies"
 
   pip_install_offline_first "/opt/pinas-dashboard/.venv/bin" \
-    adafruit-circuitpython-stmpe610 adafruit-circuitpython-xpt2046 psutil
+    adafruit-circuitpython-stmpe610 psutil
 
   cat >/opt/pinas-dashboard/nas_dashboard.py <<'EOPY2'
 #!/usr/bin/env python3
@@ -825,8 +825,9 @@ def sample_net_rates(
 
 
 def draw_dashboard(
-    disp,
     draw,
+    width,
+    height,
     font_big,
     font_medium,
     font_small,
@@ -835,9 +836,6 @@ def draw_dashboard(
     rx_bps: float,
     tx_bps: float,
 ):
-    width = disp.width
-    height = disp.height
-
     draw.rectangle((0, 0, width, height), fill=(0, 0, 0))
 
     y = 0
@@ -923,15 +921,23 @@ def main():
     display, ts, touch_driver = init_display_and_touch()
     font_big, font_medium, font_small = load_fonts()
 
+    hw_width = display.width
+    hw_height = display.height
+    rotate_output = hw_width < hw_height
+    logical_width = 320
+    logical_height = 240
+
     display_model = "XPT2046" if touch_driver == "xpt2046" else "XC9022"
     if touch_driver is None:
         print("Touch controller not detected; dashboard touch input disabled")
     else:
         print(f"Touch controller detected: {touch_driver}")
-    print(f"Dashboard configured for {display_model}")
+    print(
+        f"Dashboard configured for {display_model}, framebuffer {hw_width}x{hw_height}, rotate_output={rotate_output}"
+    )
 
-    width = display.width
-    height = display.height
+    width = logical_width
+    height = logical_height
     image = Image.new("RGB", (width, height))
     draw = ImageDraw.Draw(image)
 
@@ -957,8 +963,9 @@ def main():
         prev_net, rx_bps, tx_bps = sample_net_rates(iface, prev_net)
 
         draw_dashboard(
-            display,
             draw,
+            width,
+            height,
             font_big,
             font_medium,
             font_small,
@@ -968,7 +975,8 @@ def main():
             tx_bps,
         )
 
-        display.image(image)
+        output_image = image.transpose(Image.ROTATE_90) if rotate_output else image
+        display.image(output_image)
 
         time.sleep(UPDATE_INTERVAL)
 

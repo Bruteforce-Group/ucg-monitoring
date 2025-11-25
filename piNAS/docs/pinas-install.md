@@ -9,6 +9,7 @@ The scripts you imaged live at:
 
 - `Projects/piNAS/sbin/pinas-install.sh`
 - `Projects/piNAS/sbin/pinas-cache-deps.sh`
+- `Projects/piNAS/scripts/setup-sdcard.sh` – helper run on your workstation to copy the installer assets + cloud-init data onto an SD card.
 
 All paths below are from the Pi's perspective (i.e., when these scripts are actually executed on piNAS).
 
@@ -100,6 +101,7 @@ Result: the SD card now holds all required `.deb` and `.whl` files for later off
   - `PIP_CACHE_DIR="$BOOT_MNT/pinas-py"`
 - Detects the **main user** (`APP_USER`): first UID ≥ 1000 in `/etc/passwd` (excluding `nobody`), falling back to `pi`.
 - Ensures the kernel command line (`/boot/firmware/cmdline.txt` or `/boot/cmdline.txt`) contains `modules-load=dwc2,g_ether` so gadget mode modules come up automatically on every boot.
+- Keeps only curated boot assets (`boot/user-data` + templates) in the repo; the original full `/boot` mirror lives in `archive/boot-stock-full/` for reference.
 - Installs and enables a small systemd unit (`pinas-install-onboot.service`) that re-runs the installer automatically on the *next* boot whenever a manual run completes. That automatic pass reboots the Pi again when it finishes so kernel/device-tree changes are guaranteed to take effect without human intervention.
 - Creates a machine-readable progress file at `$BOOT_MNT/pinas-progress.json` that records the status of each installation stage.
 - Emits a concise stage dashboard in the console log so you can watch progress over SSH/XTerm as well as on the TFT.
